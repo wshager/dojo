@@ -6,6 +6,7 @@ function(lang, when /*=====, declare, Store =====*/){
 
 var Cache = function(masterStore, cachingStore, options){
 	options = options || {};
+	var inflight={};
 	return lang.delegate(masterStore, {
 		query: function(query, directives){
 			var results = masterStore.query(query, directives);
@@ -20,12 +21,17 @@ var Cache = function(masterStore, cachingStore, options){
 		queryEngine: masterStore.queryEngine || cachingStore.queryEngine,
 		get: function(id, directives){
 			return when(cachingStore.get(id), function(result){
-				return result || when(masterStore.get(id, directives), function(result){
+				if(result) return result;
+				if(id in inflight) return inflight[id];
+				return when(inflight[id]=masterStore.get(id,directives)).then(function(result){
 					if(result){
 						cachingStore.put(result, {id: id});
 					}
+					delete inflight[id];
 					return result;
-				});
+				},function(){
+					delete inflight[id];
+ 				});
 			});
 		},
 		add: function(object, directives){
